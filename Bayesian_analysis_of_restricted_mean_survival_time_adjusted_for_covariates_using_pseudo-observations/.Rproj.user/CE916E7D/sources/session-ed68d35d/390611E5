@@ -1,0 +1,28 @@
+{
+    "id": "390611E5",
+    "path": "~/pseudoGMM_RMST/Bayesian_analysis_of_restricted_mean_survival_time_adjusted_for_covariates_using_pseudo-observations_code.Rmd",
+    "project_path": "Bayesian_analysis_of_restricted_mean_survival_time_adjusted_for_covariates_using_pseudo-observations_code.Rmd",
+    "type": "r_markdown",
+    "hash": "2407983007",
+    "contents": "",
+    "dirty": false,
+    "created": 1740996134394.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "83,3",
+        "scrollLine": "67",
+        "useRainbowParens": "true"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1741012125,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1741012125767,
+    "read_only": false,
+    "read_only_alternatives": []
+}

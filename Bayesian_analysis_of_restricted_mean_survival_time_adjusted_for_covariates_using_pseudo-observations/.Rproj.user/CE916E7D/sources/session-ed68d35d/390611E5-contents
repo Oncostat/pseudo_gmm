@@ -1,0 +1,108 @@
+---
+title: "Supplementary material - code"
+author: "Léa Orsini"
+date: "2025-03-03"
+output: pdf_document
+---
+
+```{r, message = F, warnings=FALSE}
+library(tidyverse)
+library(pseudo)
+library(geepack)
+library(rstan)
+options(mc.cores = parallel::detectCores())
+
+setwd("~/pseudoGMM_RMST")
+
+source('MCMC_traceplot.R')
+```
+
+# Data generation 
+```{r, message = F, warnings=FALSE}
+s = 1
+n = 200
+set.seed(s)
+  U <- runif(n)
+  Trt <- rbinom(n, 1, 0.5)
+  shape = 0.61*(Trt == 0) + 0.8*(Trt == 1)
+  scale = 0.28*(Trt == 0) + 0.18*(Trt == 1)
+  
+  Z1 <- rnorm(n,0, 1) # runif(n,0,2)
+  Z2 <- rbinom(n, 1, 0.5) 
+  b1 <- log(2)
+  b2 <- log(1.5)
+  
+  X1 <- rnorm(n)
+  X2 <- rbinom(n, 1, 0.5)
+  
+  T_tilde = (-(log(U))/((scale)^(1/shape)*exp(b1*Z1 + b2*Z2)))^shape
+  C = runif(n, 0, 11)
+  
+  time <- pmin(T_tilde, C, 8)
+  event <- as.numeric(time ==T_tilde)
+  
+  simu <- data.frame(time = time, 
+                     event = event,
+                     patID = 1:n,
+                     Trt = Trt, 
+                     Z1 = Z1, 
+                     Z2 = Z2, 
+                     X1 = X1, 
+                     X2 = X2)
+  
+```
+
+
+
+# Data Analysis with the Bayesian GMM
+### Without covariable adjustment 
+
+```{r, message = F, warnings=FALSE,  cache=TRUE}
+tau = 5 # truncation time (5 years)
+
+  np = 2 #nb of parameters
+  n = length(simu$patID) #sample size
+  simu.tau = min(tau, min(max(simu$time[simu$Trt == 1]), max(simu$time[simu$Trt == 0])))
+  #compute the pseudo-observations
+  simu$rmst<-pseudomean(simu$time, simu$event, tmax = simu.tau)
+  
+  X = matrix(c(rep(1,n), simu$Trt), 
+             nrow = n, ncol = np)
+  
+  data <- list(X = X, Y = simu$rmst, n = n, N = n, np = np)
+  
+  #fit a GMM with independence working matrix
+  GMM <- stan_model("GMM_ind_single_tau.stan")
+  fit <- sampling(GMM, data = data, chains = 3, iter = 2000, warmup = 1000, seed = 1, init_r = 1, cores = 3,
+                  save_warmup = T, refresh = 1000)
+  
+summary(fit)
+
+MCMC_traceplot(fit, c('beta[1]', 'beta[2]'))
+```
+
+### With covariates adjustments
+
+```{r, message = F, warnings=FALSE, cache=TRUE}
+np = 4  #nb of parameters
+n = length(simu$patID)
+simu.tau = min(tau, min(max(simu$time[simu$Trt == 1]), max(simu$time[simu$Trt == 0])))
+#compute the pseudo-observations
+simu$rmst<-pseudomean(simu$time, simu$event, tmax = simu.tau)
+  
+X = matrix(c(rep(1,n), simu$Trt, simu$Z1, simu$Z2), 
+             nrow = n, ncol = np)
+
+  
+data <- list(X = X, Y = simu$rmst, n = n, N = n, np = np)
+  
+#fit a GMM with independence working matrix
+GMM <- stan_model("GMM_ind_single_tau.stan")
+fit <- sampling(GMM, data = data, chains = 3, iter = 2000, warmup = 1000, seed = 1, init_r = 1, cores = 3,
+                save_warmup = T, refresh = 1000)
+  
+summary(fit, c('beta[1]', 'beta[2]', 'beta[3]', 'beta[4]'))
+
+MCMC_traceplot(fit, c('beta[1]', 'beta[2]', 'beta[3]', 'beta[4]'))  
+```
+

@@ -1,0 +1,286 @@
+########################################################
+## Library
+########################################################
+library(pseudo)
+library(geepack)
+library(tidyverse)
+library(nimble)
+library(rstan)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+########################################################
+## Import files
+########################################################
+source("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/data/simu.R")
+source("C:/Users/l_orsini/Documents/Roche/rmst/IMPower110/dataviz/MCMC_traceplot.R")
+
+########################################################
+## Import functions
+########################################################
+#source("C:/Users/l_orsini/Documents/Roche/rmst/GMM_nimble/GMM_exch_single_tau.R")
+source("C:/Users/l_orsini/Documents/Roche/rmst/GMM_nimble/GMM_ind_single_tau.R")
+
+########################################################
+## Dataviz
+########################################################
+source('C:/Users/l_orsini/Documents/Roche/rmst/fraitly/dataviz/surv_curves_RMST_simu.R')
+source('C:/Users/l_orsini/Documents/Roche/rmst/fraitly/dataviz/surv_curves_RMST_groups_simu.R')
+########################################################
+## PO + GEE RMST
+########################################################
+#compute the pseudo-observations
+simu$rmst<-pseudomean(simu$time, simu$event, tmax = tau)
+
+#fit a GEE model
+######### independence WCM ##########
+fit_GEE_ind <- geese(rmst ~ Trt, data = simu, id = patID, mean.link = "identity", corstr = "independence")
+res_GEE_ind <- data.frame(dRMST = fit_GEE_ind$beta[[2]], se = sqrt(diag(fit_GEE_ind$vbeta))[[2]],
+                      LCI = NA,
+                      UCI = NA)
+
+res_GEE_ind[,3:4] = res_GEE_ind$dRMST + c(-1,1)*1.96*res_GEE_ind$se
+res_GEE_ind
+
+######### exchangeable WCM ##########
+fit_GEE_exch <- geese(rmst ~ Trt, data = simu, id = center, mean.link = "identity", corstr = "exchangeable")
+res_GEE_exch <- data.frame(dRMST = fit_GEE_exch$beta[[2]], se = sqrt(diag(fit_GEE_exch$vbeta))[[2]],
+                      LCI = NA,
+                      UCI = NA)
+
+res_GEE_exch[,3:4] = res_GEE_exch$dRMST + c(-1,1)*1.96*res_GEE_exch$se
+res_GEE_exch
+
+#########################################################
+### PO + GMM RMST -- STAN
+#########################################################
+########## independence WCM ##########
+##compute the pseudo-observations
+#simu$rmst<-pseudomean(simu$time, simu$event, tmax = tau)
+#
+##fit a GMM model
+#np = 2 #number of parameters (Intercept and Trt effect)
+#n = length(simu$patID)
+#X = matrix(c(rep(1,n), simu$Trt), 
+#           nrow = n, ncol = np)
+#
+#data <- list(X = X, Y = simu$rmst, n = n, N = n, np = np)
+#
+#GMM_ind <- stan_model("C:/Users/l_orsini/Documents/Roche/rmst/STAN_programs/GMM_ind_single_tau.stan") # with prior N(0, 1000)
+#fit_GMM_ind <- sampling(GMM_ind, data = data, chains = 3, iter = 2000, warmup = 1000, seed = 1, init_r = 1, cores = 3,
+#                    #control = list(adapt_engaged = T, stepsize = 0.1),
+#                    save_warmup = T, refresh = 1000)
+#
+#saveRDS(fit_GMM_ind, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/fit_GMM_ind.rds"))
+#
+#res_GMM_ind <- data.frame(dRMST = summary(fit_GMM_ind)$summary[2,1],
+#                          se = summary(fit_GMM_ind)$summary[2,3],
+#                          LCI = summary(fit_GMM_ind)$summary[2,4],
+#                          UCI = summary(fit_GMM_ind)$summary[2,8]);res_GMM_ind
+#
+#saveRDS(res_GMM_ind, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/res_GMM_ind.rds"))
+#
+########## exchangeable WCM ##########
+##fit a GMM model
+#np = 2 #number of parameters (Intercept and Trt effect)
+#n = length(simu$patID)
+#nc = sum(simu$center == 1)
+#X = matrix(c(rep(1,n), simu$Trt), 
+#           nrow = n, ncol = np)
+#
+#data <- list(X = X, Y = simu$rmst, n = n, k = K, N = n,  K = K, NC = nc, np = np, nc = nc)
+#
+#GMM_exch <- stan_model("C:/Users/l_orsini/Documents/Roche/rmst/STAN_programs/GMM_exch_single_tau.stan") # with prior N(0, 1000)
+#fit_GMM_exch <- sampling(GMM_exch, data = data, chains = 3, cores = 3, iter = 2000, warmup = 1000, seed = 1, #init_r = 2,
+#                         init = list(chain1 = list(beta = fit_GEE_exch$beta), chain2 = list(beta = fit_GEE_exch$beta + 0.1), chain3 = list(beta = fit_GEE_exch$beta - 0.1)),
+#                    #control = list(adapt_engaged = T, stepsize = 0.1),
+#                    save_warmup = T, refresh = 100)
+#
+#saveRDS(fit_GMM_exch, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/fit_GMM_exch.rds"))
+#
+#res_GMM_exch <- data.frame(dRMST = summary(fit_GMM_exch)$summary[2,1],
+#                      se = summary(fit_GMM_exch)$summary[2,3],
+#                      LCI = summary(fit_GMM_exch)$summary[2,4],
+#                      UCI = summary(fit_GMM_exch)$summary[2,8]);res_GMM_exch
+#
+#saveRDS(res_GMM_exch, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/res_GMM_exch.rds"))
+#
+##------- MCMC traceplot-------
+#traceplot <- MCMC_traceplot(fit_GMM_exch, para_names = c('beta[1]', 'beta[2]')); traceplot
+#get_inits(fit_GMM_ind)
+#get_inits(fit_GMM_exch)
+#
+#get_adaptation_info(fit_GMM_exch)
+#get_adaptation_info(fit_GMM_ind)
+#
+#
+########################################################
+## PO + GMM RMST -- NIMBLE
+########################################################
+###### Without covariable adjustment ##########
+######### independence WCM ##########
+np = 2 #number of parameters (Intercept and Trt effect)
+n = length(simu$patID)
+
+#compute the pseudo-observations
+simu$rmst<-pseudomean(simu$time, simu$Trt, tmax = tau)
+
+X = matrix(c(rep(1,n), simu$Trt), 
+           nrow = n, ncol = np)
+
+data <- list(X = X, Y = simu$rmst, n = n, N = n, np = np)
+
+fit_GMM_ind_nimble = GMM_ind_MCMC_fit(data)
+
+fit_GMM_ind_nimble$summary$all.chains
+
+saveRDS(fit_GMM_ind_nimble, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/fit_GMM_ind_nimble.rds"))
+
+res_GMM_ind_nimble <- data.frame(dRMST = fit_GMM_ind_nimble$summary$all.chains[2,1],
+                          se = fit_GMM_ind_nimble$summary$all.chains[2,3],
+                          LCI = fit_GMM_ind_nimble$summary$all.chains[2,4],
+                          UCI = fit_GMM_ind_nimble$summary$all.chains[2,5]);res_GMM_ind_nimble
+
+saveRDS(res_GMM_ind_nimble, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/res_GMM_ind_nimble.rds"))
+
+zzchain <- fit_GMM_ind_nimble$chain
+names(zzchain)
+
+
+
+dist <- ggplot(data=zzchain %>% pivot_longer(cols=all_of(names(zzchain)[! names(zzchain) %in% c("chain","sampleid")]),names_to = "variable",values_to="value"),
+               aes(x=value,color = as.factor(chain))) + geom_density() + facet_wrap(~variable,scales = "free")+
+  theme_bw()+
+  scale_color_manual(values=c("#D3B99F", "#6D98BA","#9AADBF" ))+
+  labs(color = "chain"); dist
+
+traceplot  <- ggplot(data=zzchain %>% pivot_longer(cols=all_of(names(zzchain)[!names(zzchain) %in% c("chain","sampleid")]),names_to = "variable",values_to="value"),
+                     aes(x=sampleid,y=value,color = as.factor(chain))) + geom_line() + facet_wrap(~variable,scales = "free")+
+  theme_bw()+
+  scale_color_manual(values=c("#D3B99F", "#6D98BA","#9AADBF" )); traceplot 
+
+########## exchangeable WCM ##########
+##fit a GMM model
+#np = 2 #number of parameters (Intercept and Trt effect)
+#n = length(simu$patID)
+#
+##compute the pseudo-observations
+#simu$rmst<-pseudomean(simu$time, simu$Trt, tmax = tau)
+#
+#X = matrix(c(rep(1,n), (1-simu$Trt)), 
+#           nrow = n, ncol = np)
+#
+#WCM = matrix(1, nrow = np, ncol = np) - identityMatrix(np)
+#data <- list(X = X, Y = simu$rmst, WCM = WCM, n = n, N = n, np = np)
+#
+#nimble_fit_exch = GMM_exch_MCMC_fit(data)
+#
+#nimble_fit_exch$summary
+#
+#saveRDS(nimble_fit_exch, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/nimble_fit_exch.rds"))
+#
+#res_GMM_exch_nimble <- data.frame(dRMST = nimble_fit$summary$all.chains[2,1],
+#                                 se = nimble_fit$summary$all.chains[2,3],
+#                                 LCI = nimble_fit$summary$all.chains[2,4],
+#                                 UCI = nimble_fit$summary$all.chains[2,5]);res_GMM_exch_nimble
+#
+#saveRDS(res_GMM_exch_nimble, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/res_GMM_exch_nimble.rds"))
+
+######### in WCM + fraitly ##########
+#fit a GMM model
+np = 2 #number of fixed parameters (Intercept and Trt effect)
+n = length(simu$patID)
+nc = length(simu$patID[center == 1])
+K = length(unique(simu$center))
+
+#compute the pseudo-observations
+#simu$rmst<-pseudomean(simu$time, simu$Trt, tmax = tau)
+
+X = matrix(c(rep(1,n), simu$Trt), 
+           nrow = n, ncol = np)
+
+data <- list(X = X, center = simu$center, Y = simu$rmst, n = n, N = n, np = np, nc = nc, K = K)
+
+#### Prior###
+plot(x = seq(0, 10, length.out = 1000), y = dt(seq(0, 10, length.out = 1000),  df = 20), type = 'l')
+
+source("C:/Users/l_orsini/Documents/Roche/rmst/GMM_nimble/GMM_ind_single_tau_w_fraitly_6.R")
+
+
+nimble_fit_ind_w_fraitly = GMM_ind_MCMC_fit_w_fraitly(data)
+
+ 
+nimble_fit_ind_w_fraitly$summary
+
+saveRDS(nimble_fit_ind_w_fraitly, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/nimble_fit_ind_w_fraitly_6.rds"))
+
+res_GMM_nimble_fit_ind_w_fraitly <- data.frame(dRMST = nimble_fit_ind_w_fraitly$summary$all.chains[2,1],
+                                  se = nimble_fit_ind_w_fraitly$summary$all.chains[2,3],
+                                  LCI = nimble_fit_ind_w_fraitly$summary$all.chains[2,4],
+                                  UCI = nimble_fit_ind_w_fraitly$summary$all.chains[2,5]);res_GMM_nimble_fit_ind_w_fraitly
+
+saveRDS(res_GMM_nimble_fit_ind_w_fraitly, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/res_GMM_nimble_fit_ind_w_fraitly_6.rds"))
+
+zzchain <- nimble_fit_ind_w_fraitly$chain
+names(zzchain)
+
+
+dist <- ggplot(data=zzchain %>% pivot_longer(cols=all_of(names(zzchain)[! names(zzchain) %in% c("chain","sampleid")]),names_to = "variable",values_to="value"),
+               aes(x=value,color = as.factor(chain))) + geom_density() + facet_wrap(~variable,scales = "free")+
+  theme_bw()+
+  scale_color_manual(values=c("#D3B99F", "#6D98BA","#9AADBF" ))+
+  labs(color = "chain"); dist
+
+traceplot  <- ggplot(data=zzchain %>% pivot_longer(cols=all_of(names(zzchain)[!names(zzchain) %in% c("chain","sampleid")]),names_to = "variable",values_to="value"),
+                     aes(x=sampleid,y=value,color = as.factor(chain))) + geom_line() + facet_wrap(~variable,scales = "free")+
+  theme_bw()+
+  scale_color_manual(values=c("#D3B99F", "#6D98BA","#9AADBF" )); traceplot 
+
+
+
+######### in WCM + fraitly HR ##########
+#fit a GMM model
+np = 2 #number of fixed parameters (Intercept and Trt effect)
+n = length(simu$patID)
+nc = length(simu$patID[center == 1])
+K = length(unique(simu$center))
+
+#compute the pseudo-observations
+pv <-pseudosurv(simu$time, simu$Trt, tmax = 5)
+Y = 1-pv$pseudo
+
+X = matrix(c(rep(1,n), simu$Trt), 
+           nrow = n, ncol = np)
+
+data <- list(X = X, Y = Y, n = n, N = n, np = np, nc = nc, K = K)
+
+source("C:/Users/l_orsini/Documents/Roche/rmst/GMM_nimble/GMM_ind_single_tau_w_fraitly_HR.R")
+
+nimble_fit_ind_w_fraitly = GMM_ind_MCMC_fit_w_fraitly(data)
+
+nimble_fit_ind_w_fraitly$summary
+
+saveRDS(nimble_fit_ind_w_fraitly, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/nimble_fit_ind_w_fraitly.rds"))
+
+res_GMM_nimble_fit_ind_w_fraitly <- data.frame(dRMST = nimble_fit_ind_w_fraitly$summary$all.chains[2,1],
+                                               se = nimble_fit_ind_w_fraitly$summary$all.chains[2,3],
+                                               LCI = nimble_fit_ind_w_fraitly$summary$all.chains[2,4],
+                                               UCI = nimble_fit_ind_w_fraitly$summary$all.chains[2,5]);res_GMM_nimble_fit_ind_w_fraitly
+
+saveRDS(res_GMM_nimble_fit_ind_w_fraitly, paste0("C:/Users/l_orsini/Documents/Roche/rmst/fraitly/results/scen", scenID, "/res_GMM_nimble_fit_ind_w_fraitly.rds"))
+
+zzchain <- nimble_fit_ind_w_fraitly$chain
+names(zzchain)
+
+
+dist <- ggplot(data=zzchain %>% pivot_longer(cols=all_of(names(zzchain)[! names(zzchain) %in% c("chain","sampleid")]),names_to = "variable",values_to="value"),
+               aes(x=value,color = as.factor(chain))) + geom_density() + facet_wrap(~variable,scales = "free")+
+  theme_bw()+
+  scale_color_manual(values=c("#D3B99F", "#6D98BA","#9AADBF" ))+
+  labs(color = "chain"); dist
+
+traceplot  <- ggplot(data=zzchain %>% pivot_longer(cols=all_of(names(zzchain)[!names(zzchain) %in% c("chain","sampleid")]),names_to = "variable",values_to="value"),
+                     aes(x=sampleid,y=value,color = as.factor(chain))) + geom_line() + facet_wrap(~variable,scales = "free")+
+  theme_bw()+
+  scale_color_manual(values=c("#D3B99F", "#6D98BA","#9AADBF" )); traceplot 
+
